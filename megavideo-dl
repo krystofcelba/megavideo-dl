@@ -1,0 +1,114 @@
+#!/usr/bin/env python
+#-*- coding:utf-8 -*-
+
+import sys
+from PyQt4 import QtCore, QtGui
+import gtk
+
+from ui_main import Ui_main
+from ui_down import Ui_DownDialog
+
+from megavideo import megavideo
+import urllib
+import threading
+
+          
+class downThread(QtCore.QThread):
+	"""Threaded Url Grab"""
+	def __init__(self, url, locFile, parent):
+		QtCore.QThread.__init__(self, parent)
+		self.url = url
+		self.locFile = locFile
+
+	def dlProgress(self, count, blockSize, totalSize):
+		percent = int(count*blockSize*100/totalSize)
+		sys.stdout.write("\r%d%%" % percent)
+		sys.stdout.flush()
+		self.emit(QtCore.SIGNAL("updateProgress(int)"),percent)
+          
+	def run(self):
+		urllib.urlretrieve(self.url, self.locFile, reporthook=self.dlProgress)
+          
+
+
+class downDialog(QtGui.QDialog, Ui_DownDialog):
+	def __init__(self, url, locFile, parent=None):
+		QtGui.QWidget.__init__(self, parent)
+		self.setupUi(self)
+		self.label.setText("Downloading %s..."% (locFile.split("/")[-1]))
+		self.t = downThread(url, locFile, self)
+		self.connect(self.t, QtCore.SIGNAL("updateProgress(int)"), self.updateProgress)
+		self.connect(self.t, QtCore.SIGNAL("finished()"), self.reject)
+		self.t.start()
+		self.connect(self.buttonBox, QtCore.SIGNAL("rejected()"), self.reject)
+
+	def reject(self):
+		self.done(0)
+		self.t.terminate()
+
+	def updateProgress(self, percent):
+		self.progressBar.setValue(percent);
+
+
+class mainWindow(QtGui.QMainWindow, Ui_main):
+	def __init__(self, parent=None):
+		QtGui.QWidget.__init__(self, parent)
+		self.setupUi(self)
+		self.video = None;
+		self.connect(self.showInfoB, QtCore.SIGNAL("clicked()"), self.showInfo)
+		self.connect(self.copyUrlB, QtCore.SIGNAL("clicked()"), self.copyUrl)
+		self.connect(self.downVideoB, QtCore.SIGNAL("clicked()"), self.downVideo)
+	
+	def showFileDialog(self):
+		dialog = QtGui.QFileDialog(self)
+		dialog.setDefaultSuffix('flv')
+		dialog.setNameFilter('Flash video (*.flv)')
+		dialog.setFilter("*.flv")
+		return dialog.getSaveFileName(self, 'Save video to file',  'video.flv')
+
+	def downVideo(self):
+		locFile = self.showFileDialog()
+		print locFile
+		if locFile != "":
+			downD = downDialog(self.video.url, locFile, self);
+			downD.show()
+		
+	def copyUrl(self):
+		gtk.Clipboard().set_text(self.video.url);
+
+	def showInfo(self):
+		print "showing info"
+		self.statusbar.showMessage("Please wait, showing info...")
+		
+		if self.urlInput.text() == "":
+			QtGui.QMessageBox.question(self, 'Message', "Please type url like this: http://www.megavideo.com/?v=HPJB0RWP", QtGui.QMessageBox.Ok)
+			return
+		
+		try:		
+			video = megavideo(str(self.urlInput.text()))
+		except:
+			QtGui.QMessageBox.question(self, 'Message', "Failed to download video info. Did you type correct url? Have you got a internet connection?", QtGui.QMessageBox.Ok)
+			return
+		
+		self.groupBox.setEnabled(True);
+		self.sizeLabel.setText(video.size+" MB")
+		self.durLabel.setText(video.time+" min")
+		self.titleLabel.setText(video.title)
+		self.descLabel.setText(video.desc)
+		self.dateLabel.setText(video.date)
+		self.favLabel.setText(video.favorited)
+		self.commLabel.setText(video.comments)
+		self.catLabel.setText(video.category)
+		self.tagsLabel.setText(video.tags)
+		self.ratLabel.setText(video.rating)
+		
+		self.video = video;
+
+
+
+if __name__ == "__main__":
+    app = QtGui.QApplication(sys.argv);
+    myapp = mainWindow();
+    myapp.show();
+    sys.exit(app.exec_());
+
