@@ -1,5 +1,5 @@
 # megavideo.py
-# This file is part of the megadown.
+# This file is part of the megavideo-dl.
 #
 # Copyright(c) 2010 Krystof Celba
 # kristofc@seznam.cz
@@ -101,6 +101,7 @@ class megavideo:
 				pass
 
 		return "".join(loc2)
+
 
 
 
